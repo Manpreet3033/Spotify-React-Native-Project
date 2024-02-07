@@ -52,7 +52,7 @@ const HomeScreen = () => {
     try {
       const response = await axios({
         method: "GET",
-        url: "https://api.spotify.com/v1/me/player/recently-played?limit=4",
+        url: "https://api.spotify.com/v1/me/player/recently-played?limit=5",
         headers: { Authorization: `Bearer ${accessToken}` },
       });
 

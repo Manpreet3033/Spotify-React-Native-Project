@@ -1,5 +1,5 @@
 import { Pressable, StyleSheet, Text, View, Image, Modal } from "react-native";
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { FlatList, ScrollView, TextInput } from "react-native-gesture-handler";
 import { AntDesign } from "@expo/vector-icons";
@@ -20,12 +20,48 @@ const LikedSongScreen = () => {
   const navigation = useNavigation();
   const [savedTracks, setSavedTracks] = useState([]);
   const [input, setInput] = useState("");
-  const [currentSound,setCurrentSound] = useState(null);
-  const [progess,setProgress] = useState(null)
-  const [currrentTime,setCurrentTime] = useState(0)
-  const [totalDuration,setTotalDuration] = useState(0)
+  const value = useRef(0);
+  const [currentSound, setCurrentSound] = useState(null);
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [progress, setProgress] = useState(null);
+  const [currentTime, setCurrentTime] = useState(0);
+  const [totalDuration, setTotalDuration] = useState(0);
   const { currentTrack, setCurrentTrack } = useContext(Player);
   const [modalVisible, setModalVisible] = useState(false);
+
+    const playNextTrack = async() => {
+        if(currentSound){
+            await currentSound.stopAsync();
+            setCurrentSound(null);
+        }
+        value.current += 1;
+        if(value.current < savedTracks.length){
+            const nextTrack = savedTracks[value.current];
+            setCurrentTrack(nextTrack);
+            await play(nextTrack)
+        }else{
+            setCurrentTrack(savedTracks[0]);
+            await play(savedTracks[0]);
+            value.current = 0;
+        }
+    }
+
+    const playPreviousTrack = async() => {
+        if(currentSound){
+            await currentSound.stopAsync();
+            setCurrentSound(null);
+        }
+        value.current -= 1;
+        if(value.current >= 0){
+            const previousTrack = savedTracks[value.current];
+            setCurrentTrack(previousTrack);
+            await play(previousTrack)
+        }else{
+            setCurrentTrack(savedTracks[savedTracks.length-1]);
+            await play(savedTracks[savedTracks.length-1]);
+            value.current = savedTracks.length-1;
+        }
+    }
 
   const playTrack = async () => {
     if (savedTracks.length > 0) {
@@ -34,43 +70,55 @@ const LikedSongScreen = () => {
     await play(savedTracks[0]);
   };
 
-  const play = async (nextTrack) => {
-    const previewUrl = nextTrack?.track.preview_url;
-    try {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          shouldDuckAndroid: false,
-        });
-        const { sound, status } = await Audio.Sound.createAsync(
-          {
-            uri: previewUrl,
-          },
-          {
-            shouldPlay: true,
-            isLooping: false,
-          },
-          onPlaybackStatusUpdate,
-        )
-        console.log(sound)
-        onPlaybackStatusUpdate(status)
-        setCurrentSound(sound)
-        await sound.playAsync()
-      } catch (err) {
-        console.log(err.message);
+  const handlePlayPause = async () => {
+    if (currentSound) {
+      if (isPlaying) {
+        await currentSound.pauseAsync();
+      } else {
+        await currentSound.playAsync();
       }
+      setIsPlaying(!isPlaying);
+    }
   };
 
-  const onPlaybackStatusUpdate = async(status) => {
-    console.log(status)
-    if(status.isLoaded && status.isPlaying){
-        const pr = status.positionMillis - status.durationMillis;
-        console.log("Progress : ",pr)
-        setProgress(progess);
-        setCurrentTime(progess.positionMillis)
-        setTotalDuration(progess.durationMillis)
+  const play = async (nextTrack) => {
+    const previewUrl = nextTrack?.track?.preview_url;
+    try {
+      await Audio.setAudioModeAsync({
+        playsInSilentModeIOS: true,
+        staysActiveInBackground: true,
+        shouldDuckAndroid: false,
+      });
+      const { sound, status } = await Audio.Sound.createAsync(
+        {
+          uri: previewUrl,
+        },
+        {
+          shouldPlay: true,
+          isLooping: false,
+        },
+        onPlaybackStatusUpdate
+      );
+      console.log(sound);
+      onPlaybackStatusUpdate(status);
+      setCurrentSound(sound);
+      setIsPlaying(status.isLoaded); 
+      await sound.playAsync();
+    } catch (err) {
+      console.log(err.message);
     }
-  }
+  };
+
+  const onPlaybackStatusUpdate = async (status) => {
+    console.log(status);
+    if (status.isLoaded && status.isPlaying) {
+      const pr = status.positionMillis / status.durationMillis;
+      console.log("Progress : ", pr);
+      setProgress(pr);
+      setCurrentTime(status.positionMillis);
+      setTotalDuration(status.durationMillis);
+    }
+  };
 
   console.log("Current Track: ", currentTrack);
 
@@ -94,6 +142,14 @@ const LikedSongScreen = () => {
   useEffect(() => {
     getSavedTrack();
   }, []);
+
+  const circleSize = 12;
+
+  const formatTime = (time) => {
+    const minutes = Math.floor(time / 60000);
+    const seconds = Math.floor((time % 60000) / 1000);
+    return `${minutes}:${seconds < 10 ? "0" : ""}${seconds}`;
+  };
 
   console.log("Saved Track: ", savedTracks);
 
@@ -141,7 +197,7 @@ const LikedSongScreen = () => {
 
             <View style={styles.viewContainer}>
               <Text style={styles.likedSongText}>Liked Songs</Text>
-              <Text style={styles.numberOfSongs}>430 Songs</Text>
+              <Text style={styles.numberOfSongs}>{savedTracks.length} Songs</Text>
             </View>
 
             <Pressable style={styles.allBtnContainer}>
@@ -290,7 +346,38 @@ const LikedSongScreen = () => {
                   marginTop: 10,
                 }}
               >
-                <Text style={{}}>Progress Bar</Text>
+                <View
+                  style={{
+                    width: "100%",
+                    marginTop: 10,
+                    height: 3,
+                    backgroundColor: "gray",
+                    borderRadius: 5,
+                  }}
+                >
+                  <View
+                    style={[
+                      styles.progressBar,
+                      { width: `${progress * 100}%` },
+                    ]}
+                  />
+                  <View
+                    style={[
+                      {
+                        position: "absolute",
+                        top: -5,
+                        width: circleSize,
+                        height: circleSize,
+                        borderRadius: circleSize / 2,
+                        backgroundColor: "white",
+                      },
+                      {
+                        left: `${progress * 100}%`,
+                        marginLeft: -circleSize / 2,
+                      },
+                    ]}
+                  />
+                </View>
                 <View
                   style={{
                     marginTop: 15,
@@ -305,7 +392,7 @@ const LikedSongScreen = () => {
                       fontSize: 15,
                     }}
                   >
-                    0:00
+                    {formatTime(currentTime)}
                   </Text>
                   <Text
                     style={{
@@ -313,7 +400,7 @@ const LikedSongScreen = () => {
                       fontSize: 15,
                     }}
                   >
-                    0:30
+                    {formatTime(totalDuration)}
                   </Text>
                 </View>
               </View>
@@ -329,13 +416,19 @@ const LikedSongScreen = () => {
                 <Pressable>
                   <FontAwesome name="arrows" size={30} color="#03C03C" />
                 </Pressable>
-                <Pressable>
+                <Pressable onPress={playPreviousTrack}>
                   <Ionicons name="play-skip-back" size={30} color="white" />
                 </Pressable>
-                <Pressable>
-                  <AntDesign name="pausecircle" size={60} color="white" />
+                <Pressable onPress={handlePlayPause}>
+                  {isPlaying ? (
+                    <AntDesign name="pausecircle" size={60} color="white" />
+                  ) : (
+                    <Pressable onPress={handlePlayPause}>
+                      <AntDesign name="play" size={60} color="white" />
+                    </Pressable>
+                  )}
                 </Pressable>
-                <Pressable>
+                <Pressable onPress={playNextTrack}>
                   <Ionicons name="play-skip-forward" size={30} color="white" />
                 </Pressable>
                 <Pressable>
@@ -465,4 +558,5 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
+  progressBar: {},
 });
