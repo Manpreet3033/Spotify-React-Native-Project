@@ -3,9 +3,9 @@ import React, { useEffect, useState } from 'react'
 import { FlatList } from 'react-native-gesture-handler'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import axios from 'axios'
+import { useNavigation } from '@react-navigation/native'
 
 const RecentlyPlayed = ({recentlyPlayed}) => {
-    
     const renderItem = ({ item }) => {
         return (
             <Pressable style={{

@@ -1,4 +1,12 @@
-import { Pressable, StyleSheet, Text, View, Image, Modal } from "react-native";
+import {
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+  Image,
+  Modal,
+  ActivityIndicator,
+} from "react-native";
 import React, { useContext, useEffect, useRef, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import { FlatList, ScrollView, TextInput } from "react-native-gesture-handler";
@@ -15,12 +23,14 @@ import { FontAwesome } from "@expo/vector-icons";
 import { Ionicons } from "@expo/vector-icons";
 import { Feather } from "@expo/vector-icons";
 import { Audio } from "expo-av";
+import { debounce } from "lodash";
 
 const LikedSongScreen = () => {
   const navigation = useNavigation();
   const [savedTracks, setSavedTracks] = useState([]);
   const [input, setInput] = useState("");
   const value = useRef(0);
+  const [searchedTracks, setSearchedTracks] = useState([]);
   const [currentSound, setCurrentSound] = useState(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [progress, setProgress] = useState(null);
@@ -29,39 +39,39 @@ const LikedSongScreen = () => {
   const { currentTrack, setCurrentTrack } = useContext(Player);
   const [modalVisible, setModalVisible] = useState(false);
 
-    const playNextTrack = async() => {
-        if(currentSound){
-            await currentSound.stopAsync();
-            setCurrentSound(null);
-        }
-        value.current += 1;
-        if(value.current < savedTracks.length){
-            const nextTrack = savedTracks[value.current];
-            setCurrentTrack(nextTrack);
-            await play(nextTrack)
-        }else{
-            setCurrentTrack(savedTracks[0]);
-            await play(savedTracks[0]);
-            value.current = 0;
-        }
+  const playNextTrack = async () => {
+    if (currentSound) {
+      await currentSound.stopAsync();
+      setCurrentSound(null);
     }
+    value.current += 1;
+    if (value.current < savedTracks.length) {
+      const nextTrack = savedTracks[value.current];
+      setCurrentTrack(nextTrack);
+      await play(nextTrack);
+    } else {
+      setCurrentTrack(savedTracks[0]);
+      await play(savedTracks[0]);
+      value.current = 0;
+    }
+  };
 
-    const playPreviousTrack = async() => {
-        if(currentSound){
-            await currentSound.stopAsync();
-            setCurrentSound(null);
-        }
-        value.current -= 1;
-        if(value.current >= 0){
-            const previousTrack = savedTracks[value.current];
-            setCurrentTrack(previousTrack);
-            await play(previousTrack)
-        }else{
-            setCurrentTrack(savedTracks[savedTracks.length-1]);
-            await play(savedTracks[savedTracks.length-1]);
-            value.current = savedTracks.length-1;
-        }
+  const playPreviousTrack = async () => {
+    if (currentSound) {
+      await currentSound.stopAsync();
+      setCurrentSound(null);
     }
+    value.current -= 1;
+    if (value.current >= 0) {
+      const previousTrack = savedTracks[value.current];
+      setCurrentTrack(previousTrack);
+      await play(previousTrack);
+    } else {
+      value.current = savedTracks.length - 1;
+      setCurrentTrack(savedTracks[value.current]);
+      await play(savedTracks[value.current]);
+    }
+  };
 
   const playTrack = async () => {
     if (savedTracks.length > 0) {
@@ -84,6 +94,9 @@ const LikedSongScreen = () => {
   const play = async (nextTrack) => {
     const previewUrl = nextTrack?.track?.preview_url;
     try {
+      if (currentSound) {
+        await currentSound.stopAsync();
+      }
       await Audio.setAudioModeAsync({
         playsInSilentModeIOS: true,
         staysActiveInBackground: true,
@@ -102,7 +115,7 @@ const LikedSongScreen = () => {
       console.log(sound);
       onPlaybackStatusUpdate(status);
       setCurrentSound(sound);
-      setIsPlaying(status.isLoaded); 
+      setIsPlaying(status.isLoaded);
       await sound.playAsync();
     } catch (err) {
       console.log(err.message);
@@ -117,6 +130,10 @@ const LikedSongScreen = () => {
       setProgress(pr);
       setCurrentTime(status.positionMillis);
       setTotalDuration(status.durationMillis);
+      if (status.didJustFinish === true) {
+        setCurrentSound(null);
+        playNextTrack();
+      }
     }
   };
 
@@ -153,6 +170,26 @@ const LikedSongScreen = () => {
 
   console.log("Saved Track: ", savedTracks);
 
+  const debouncedSearch = debounce(handleSearchEvent, 800);
+
+  function handleSearchEvent(text) {
+    const filteredTracks = savedTracks.filter((item) =>
+      item?.track?.name?.toLowerCase().includes(text.toLowerCase())
+    );
+    setSearchedTracks(filteredTracks);
+  }
+
+  useEffect(() => {
+    if (savedTracks.length > 0) {
+      handleSearchEvent(input);
+    }
+  },[savedTracks]);
+
+  const handleInputChange = (text) => {
+    setInput(text);
+    debouncedSearch(text);
+  };
+
   return (
     <>
       <LinearGradient
@@ -175,11 +212,12 @@ const LikedSongScreen = () => {
                 <AntDesign name="search1" size={20} color="white" />
                 <TextInput
                   value={input}
-                  onChange={(text) => setInput(text)}
+                  onChange={(text) => handleInputChange(text.nativeEvent.text)}
                   placeholder="Find in Liked Songs"
                   placeholderTextColor={"white"}
                   style={{
                     fontWeight: "500",
+                    color: "white"
                   }}
                 />
               </Pressable>
@@ -197,7 +235,9 @@ const LikedSongScreen = () => {
 
             <View style={styles.viewContainer}>
               <Text style={styles.likedSongText}>Liked Songs</Text>
-              <Text style={styles.numberOfSongs}>{savedTracks.length} Songs</Text>
+              <Text style={styles.numberOfSongs}>
+                {savedTracks.length} Songs
+              </Text>
             </View>
 
             <Pressable style={styles.allBtnContainer}>
@@ -216,11 +256,21 @@ const LikedSongScreen = () => {
               </View>
             </Pressable>
 
-            <FlatList
-              showsHorizontalScrollIndicator={false}
-              data={savedTracks}
-              renderItem={({ item }) => <SongItem item={item} />}
-            />
+            {searchedTracks.length === 0 ? (
+              <ActivityIndicator size="large" color="gray" />
+            ) : (
+              <FlatList
+                showsHorizontalScrollIndicator={false}
+                data={searchedTracks}
+                renderItem={({ item }) => (
+                  <SongItem
+                    item={item}
+                    onPress={play}
+                    isPlaying={item === currentTrack}
+                  />
+                )}
+              />
+            )}
           </ScrollView>
         </SafeAreaView>
       </LinearGradient>
@@ -242,8 +292,14 @@ const LikedSongScreen = () => {
           </View>
           <View style={styles.currentSongButtons}>
             <AntDesign name="heart" size={24} color="#1DB954" />
-            <Pressable>
-              <AntDesign name="pausecircle" size={24} color="white" />
+            <Pressable onPress={handlePlayPause}>
+              {isPlaying ? (
+                <AntDesign name="pausecircle" size={24} color="white" />
+              ) : (
+                <Pressable onPress={handlePlayPause}>
+                  <AntDesign name="play" size={24} color="white" />
+                </Pressable>
+              )}
             </Pressable>
           </View>
         </Pressable>
@@ -558,5 +614,4 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
   },
-  progressBar: {},
 });

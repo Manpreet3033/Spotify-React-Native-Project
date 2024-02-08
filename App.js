@@ -9,8 +9,8 @@ export default function App() {
   return (
     <>
       <PlayerContext>
-          <Navigation />
-          <ModalPortal />
+        <Navigation />
+        <ModalPortal />
       </PlayerContext>
     </>
   );

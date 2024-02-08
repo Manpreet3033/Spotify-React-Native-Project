@@ -101,8 +101,8 @@ const HomeScreen = () => {
               <Avatar
                 containerStyle={{
                   marginLeft: 20,
-                  height: 40,
-                  width: 40,
+                  height: 50,
+                  width: 50,
                   backgroundColor: "gray",
                 }}
                 size={"medium"}
@@ -184,8 +184,8 @@ const styles = StyleSheet.create({
     marginTop: 60,
   },
   profileIcon: {
-    width: 40,
-    height: 40,
+    width: 50,
+    height: 50,
     marginLeft: 20,
     borderRadius: 20,
     resizeMode: "cover",
